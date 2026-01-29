@@ -9,6 +9,7 @@ export interface Wod {
 
 export interface WodCardProps {
   wod: Wod;
+  searchTerm?: string;
 }
 
 export interface SearchBarProps {
@@ -18,4 +19,5 @@ export interface SearchBarProps {
 
 export interface WodListProps {
   wods: Wod[];
+  searchTerm?: string;
 }

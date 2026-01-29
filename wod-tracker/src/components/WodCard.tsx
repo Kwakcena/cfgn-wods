@@ -1,14 +1,33 @@
 import type { WodCardProps } from '../types';
 
-export function WodCard({ wod }: WodCardProps) {
+export function WodCard({ wod, searchTerm }: WodCardProps) {
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
+    return date.toLocaleDateString('ko-KR', {
       weekday: 'short',
       year: 'numeric',
-      month: 'short',
+      month: 'long',
       day: 'numeric',
     });
+  };
+
+  const highlightText = (text: string, search: string) => {
+    if (!search.trim()) {
+      return text;
+    }
+
+    const regex = new RegExp(`(${search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    const parts = text.split(regex);
+
+    return parts.map((part, index) =>
+      regex.test(part) ? (
+        <mark key={index} className="bg-yellow-300 text-gray-900 rounded px-0.5">
+          {part}
+        </mark>
+      ) : (
+        part
+      )
+    );
   };
 
   return (
@@ -16,8 +35,8 @@ export function WodCard({ wod }: WodCardProps) {
       <div className="text-sm font-semibold text-gray-500 mb-2 uppercase tracking-wide">
         {formatDate(wod.date)}
       </div>
-      <div className="text-gray-900 text-lg md:text-xl font-medium leading-relaxed">
-        {wod.content}
+      <div className="text-gray-900 text-base md:text-lg font-medium leading-relaxed whitespace-pre-line">
+        {highlightText(wod.content, searchTerm || '')}
       </div>
     </div>
   );

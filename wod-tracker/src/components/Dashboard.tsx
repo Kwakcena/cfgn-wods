@@ -42,7 +42,7 @@ export function Dashboard() {
 
       <SearchBar searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
-      <main className="max-w-6xl mx-auto pb-8">
+      <main className="pb-8">
         <div className="px-4 py-2 text-sm text-gray-500">
           {debouncedSearchTerm ? (
             <span>
@@ -52,7 +52,7 @@ export function Dashboard() {
             <span>{wods.length} workouts available</span>
           )}
         </div>
-        <WodList wods={filteredWods} />
+        <WodList wods={filteredWods} searchTerm={debouncedSearchTerm} />
       </main>
     </div>
   );
