@@ -71,7 +71,7 @@ export function WodList({ wods, searchTerm }: WodListProps) {
   return (
     <div
       ref={parentRef}
-      className="h-[calc(100vh-200px)] overflow-auto p-4"
+      className="h-[calc(100vh-200px)] overflow-auto p-4 overscroll-none"
     >
       <div
         style={{
