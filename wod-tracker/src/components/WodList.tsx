@@ -1,7 +1,49 @@
+import { useRef, useEffect, useState } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import type { WodListProps } from '../types';
 import { WodCard } from './WodCard';
 
+function useWindowSize() {
+  const [size, setSize] = useState({ width: window.innerWidth });
+
+  useEffect(() => {
+    const handleResize = () => setSize({ width: window.innerWidth });
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  return size;
+}
+
+function getColumnCount(width: number): number {
+  if (width >= 1280) return 5; // xl
+  if (width >= 1024) return 3; // lg
+  if (width >= 768) return 2;  // md
+  return 1;
+}
+
 export function WodList({ wods, searchTerm }: WodListProps) {
+  const parentRef = useRef<HTMLDivElement>(null);
+  const { width } = useWindowSize();
+  const columnCount = getColumnCount(width);
+
+  const rowCount = Math.ceil(wods.length / columnCount);
+
+  const virtualizer = useVirtualizer({
+    count: rowCount,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 300,
+    overscan: 3,
+    measureElement: (element) => {
+      return element.getBoundingClientRect().height + 16; // 16px for gap
+    },
+  });
+
+  // Re-measure when column count changes
+  useEffect(() => {
+    virtualizer.measure();
+  }, [columnCount, virtualizer]);
+
   if (wods.length === 0) {
     return (
       <div className="text-center py-12 px-4">
@@ -27,10 +69,48 @@ export function WodList({ wods, searchTerm }: WodListProps) {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 p-4">
-      {wods.map((wod) => (
-        <WodCard key={wod.date} wod={wod} searchTerm={searchTerm} />
-      ))}
+    <div
+      ref={parentRef}
+      className="h-[calc(100vh-200px)] overflow-auto p-4"
+    >
+      <div
+        style={{
+          height: `${virtualizer.getTotalSize()}px`,
+          width: '100%',
+          position: 'relative',
+        }}
+      >
+        {virtualizer.getVirtualItems().map((virtualRow) => {
+          const startIndex = virtualRow.index * columnCount;
+          const rowWods = wods.slice(startIndex, startIndex + columnCount);
+
+          return (
+            <div
+              key={virtualRow.key}
+              data-index={virtualRow.index}
+              ref={virtualizer.measureElement}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                transform: `translateY(${virtualRow.start}px)`,
+              }}
+            >
+              <div
+                className="grid gap-4"
+                style={{
+                  gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`,
+                }}
+              >
+                {rowWods.map((wod) => (
+                  <WodCard key={wod.date} wod={wod} searchTerm={searchTerm} />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
