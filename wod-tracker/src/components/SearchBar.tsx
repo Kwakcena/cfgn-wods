@@ -1,4 +1,4 @@
-import type { SearchBarProps } from '../types';
+import type { SearchBarProps } from "../types";
 
 export function SearchBar({ searchTerm, onSearchChange }: SearchBarProps) {
   return (
@@ -22,13 +22,13 @@ export function SearchBar({ searchTerm, onSearchChange }: SearchBarProps) {
             type="text"
             value={searchTerm}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search workouts... (e.g., thrusters, AMRAP, pull-ups)"
+            placeholder="와드 동작을 검색해보세요 (ex. snatches, A-bike...)"
             className="w-full pl-12 pr-12 py-4 text-lg border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all bg-white text-gray-900 placeholder-gray-400"
             aria-label="Search workouts"
           />
           {searchTerm && (
             <button
-              onClick={() => onSearchChange('')}
+              onClick={() => onSearchChange("")}
               className="absolute right-3 top-1/2 -translate-y-1/2 p-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
               aria-label="Clear search"
             >

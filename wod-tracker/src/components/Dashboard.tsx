@@ -1,12 +1,12 @@
-import { useState, useMemo } from 'react';
-import { SearchBar } from './SearchBar';
-import { WodList } from './WodList';
-import { useDebounce } from '../hooks/useDebounce';
-import type { Wod, WodData } from '../types';
-import wodData from '../data/wods.json';
+import { useState, useMemo } from "react";
+import { SearchBar } from "./SearchBar";
+import { WodList } from "./WodList";
+import { useDebounce } from "../hooks/useDebounce";
+import type { Wod, WodData } from "../types";
+import wodData from "../data/wods.json";
 
 export function Dashboard() {
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
   const wods = useMemo((): Wod[] => {
@@ -23,7 +23,7 @@ export function Dashboard() {
 
     const searchLower = debouncedSearchTerm.toLowerCase();
     return wods.filter((wod) =>
-      wod.content.toLowerCase().includes(searchLower)
+      wod.content.toLowerCase().includes(searchLower),
     );
   }, [wods, debouncedSearchTerm]);
 
@@ -32,10 +32,10 @@ export function Dashboard() {
       <header className="bg-gray-900 text-white py-6 px-4">
         <div className="max-w-6xl mx-auto">
           <h1 className="text-2xl md:text-3xl font-bold text-center">
-            CrossFit WOD Tracker
+            크로스핏 강남 언주 와드
           </h1>
           <p className="text-gray-400 text-center mt-1 text-sm md:text-base">
-            Search and track your daily workouts
+            이전에 했던 와드를 쉽게 찾을 수 있어요
           </p>
         </div>
       </header>
