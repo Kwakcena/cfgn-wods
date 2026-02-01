@@ -6,6 +6,9 @@ on:
     - cron: '0 14,15,16 * * *'
   workflow_dispatch: # 수동 실행 가능
 
+permissions:
+  contents: write
+
 jobs:
   crawl:
     runs-on: ubuntu-latest
