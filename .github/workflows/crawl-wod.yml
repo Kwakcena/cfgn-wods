@@ -30,9 +30,6 @@ jobs:
       - name: Run crawler
         run: |
           python scripts/crawl_instagram.py --stop-on-existing
-        env:
-          INSTAGRAM_USER: ${{ secrets.INSTAGRAM_USER }}
-          INSTAGRAM_PASS: ${{ secrets.INSTAGRAM_PASS }}
 
       - name: Check for changes
         id: changes
