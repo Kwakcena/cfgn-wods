@@ -31,6 +31,7 @@ jobs:
           pip install -r scripts/requirements.txt
 
       - name: Run crawler
+        continue-on-error: true  # Rate limit 발생 시에도 워크플로우 계속 진행
         run: |
           python scripts/crawl_instagram.py --stop-on-existing
 
