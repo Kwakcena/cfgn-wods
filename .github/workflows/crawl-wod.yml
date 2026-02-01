@@ -9,6 +9,9 @@ on:
 jobs:
   crawl:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: wod-tracker
 
     steps:
       - name: Checkout repository
