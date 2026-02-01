@@ -1,1 +1,2 @@
 instaloader>=4.10
+python-dotenv>=1.0.0

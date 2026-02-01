@@ -24,4 +24,8 @@ dist-ssr
 *.sw?
 
 scripts/venv
+
+# Environment files (sensitive credentials)
+.env
 .env.*
+scripts/.env

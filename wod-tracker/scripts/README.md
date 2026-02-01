@@ -1,6 +1,7 @@
 # Instagram Crawler Scripts
 
 This directory contains scripts for crawling Instagram posts to populate the WOD data.
+Anti-blocking best practices applied based on [ScrapingBee's guide](https://www.scrapingbee.com/blog/web-scraping-without-getting-blocked/).
 
 ## Setup
 
@@ -24,58 +25,53 @@ brew install pipx
 pipx install instaloader
 ```
 
-### Option 3: Direct pip install
+## Configuration
+
+### Environment Variables
+
+Copy `.env.example` to `.env` and configure:
 
 ```bash
-pip install instaloader
-# or
-pip3 install instaloader
+cp scripts/.env.example scripts/.env
 ```
+
+Available settings:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `INSTAGRAM_USER` | Instagram username for login | None |
+| `INSTAGRAM_PASS` | Instagram password for login | None |
+| `PROXY_HTTP` | HTTP proxy URL | None |
+| `MIN_DELAY` | Minimum delay between requests | 3.0 |
+| `MAX_DELAY` | Maximum delay between requests | 7.0 |
 
 ## Usage
 
-### Basic Usage (Public Profiles)
+### Basic Usage
 
 ```bash
-# If using virtual environment, activate it first
+# Activate virtual environment
 source scripts/venv/bin/activate
 
-python3 scripts/crawl_instagram.py
+# Run crawler
+python scripts/crawl_instagram.py
 ```
 
-This will crawl the default account (`cfgn_ej`) and save posts to `src/data/wods.json`.
-
-### Custom Target Account
+### With Custom Options
 
 ```bash
-python3 scripts/crawl_instagram.py --username some_crossfit_box
+# Limit to 100 posts with slower delays
+python scripts/crawl_instagram.py --max-posts 100 --delay-min 5 --delay-max 10
+
+# With proxy
+python scripts/crawl_instagram.py --proxy http://user:pass@proxy:port
+
+# With login
+python scripts/crawl_instagram.py --login-user myuser --login-pass mypass
+
+# Debug mode (verbose output)
+python scripts/crawl_instagram.py --debug
 ```
-
-### Custom Output File
-
-```bash
-python3 scripts/crawl_instagram.py --output /path/to/output.json
-```
-
-### Private Profiles (Requires Login)
-
-For private profiles, you need to login with an Instagram account that follows the target profile.
-
-**Option 1: Environment Variables (Recommended)**
-
-```bash
-export INSTAGRAM_USER="your_username"
-export INSTAGRAM_PASS="your_password"
-python3 scripts/crawl_instagram.py
-```
-
-**Option 2: Command Line Arguments**
-
-```bash
-python3 scripts/crawl_instagram.py --login-user your_username --login-pass your_password
-```
-
-Note: The script will save your session to `~/.config/instaloader/session-{username}` so you don't need to login every time.
 
 ## Command Line Options
 
@@ -83,8 +79,75 @@ Note: The script will save your session to `~/.config/instaloader/session-{usern
 |--------|-------|-------------|---------|
 | `--username` | `-u` | Instagram account to crawl | `cfgn_ej` |
 | `--output` | `-o` | Output JSON file path | `src/data/wods.json` |
-| `--login-user` | | Your Instagram username | `INSTAGRAM_USER` env var |
-| `--login-pass` | | Your Instagram password | `INSTAGRAM_PASS` env var |
+| `--login-user` | | Your Instagram username | `INSTAGRAM_USER` env |
+| `--login-pass` | | Your Instagram password | `INSTAGRAM_PASS` env |
+| `--proxy` | | Proxy URL | `PROXY_HTTP` env |
+| `--delay-min` | | Minimum delay (seconds) | 3.0 |
+| `--delay-max` | | Maximum delay (seconds) | 7.0 |
+| `--max-posts` | | Maximum posts to fetch | All |
+| `--debug` | | Enable debug logging | Off |
+
+## Anti-Blocking Features
+
+This crawler implements several techniques to avoid getting blocked:
+
+### 1. Request Rate Limiting
+- Random delays between 3-7 seconds (configurable)
+- Random jitter added to avoid predictable patterns
+- 10% chance of additional 2-5 second pause to simulate human behavior
+
+### 2. Exponential Backoff
+- Automatically backs off on rate limiting errors
+- Doubles wait time on each consecutive error (capped at 5 minutes)
+- Resets after successful requests
+
+### 3. User-Agent Rotation
+- Uses realistic, up-to-date browser user agents
+- Rotates randomly from Chrome, Firefox, Safari on various platforms
+- Changes user agent on retry after errors
+
+### 4. Proxy Support
+- Optional proxy configuration via command line or environment variable
+- Residential proxies recommended for better success rates
+
+### 5. Session Persistence
+- Saves login session to avoid repeated logins
+- Sessions stored in `~/.config/instaloader/session-{username}`
+
+### 6. Progress Checkpoints
+- Saves progress every 10 new posts
+- Can resume from where it left off on restart
+
+## Best Practices for Avoiding Blocks
+
+### Recommended Scraping Times
+Run the crawler during off-peak hours for better success rates:
+- **00:00 - 06:00 KST** (Korean Standard Time)
+- **15:00 - 21:00 UTC**
+
+The crawler will log a warning if running outside these hours.
+
+### Delay Settings
+- **Conservative (recommended)**: `--delay-min 5 --delay-max 10`
+- **Default**: `--delay-min 3 --delay-max 7`
+- **Aggressive (higher risk)**: `--delay-min 1 --delay-max 3`
+
+### Using Proxies
+Residential proxies are more effective than datacenter proxies:
+- [BrightData](https://brightdata.com/)
+- [Oxylabs](https://oxylabs.io/)
+- [SmartProxy](https://smartproxy.com/)
+
+```bash
+export PROXY_HTTP="http://user:pass@proxy.example.com:8080"
+python scripts/crawl_instagram.py
+```
+
+### Rotating IP Addresses
+If you get blocked:
+1. Wait 10-30 minutes before retrying
+2. Switch to a different network (VPN, mobile hotspot)
+3. Use a different VPN server location
 
 ## Output Format
 
@@ -102,48 +165,48 @@ Posts are sorted by date in descending order (newest first).
 
 ## Troubleshooting
 
-### "Profile is private"
+### Rate Limiting (403/401/429 Errors)
 
-You need to login with an account that follows the private profile:
-
-```bash
-export INSTAGRAM_USER="your_username"
-export INSTAGRAM_PASS="your_password"
-python3 scripts/crawl_instagram.py
+```
+Rate limited by Instagram. Saving progress...
 ```
 
-### "Login required"
+Solutions:
+1. Wait 10-30 minutes before retrying
+2. Switch network (VPN, mobile hotspot, different Wi-Fi)
+3. Use a proxy server
+4. Run during off-peak hours (00:00-06:00 KST)
 
-Instagram may require login to access some profiles. Use the login options above.
+### "Profile is private"
+
+Login with an account that follows the private profile:
+
+```bash
+python scripts/crawl_instagram.py --login-user your_username --login-pass your_password
+```
 
 ### "Two-factor authentication required"
 
-If your account has 2FA enabled, you have two options:
-
-1. Temporarily disable 2FA, login once (session will be saved), then re-enable 2FA
-2. Use a browser to login and export the session manually
-
-### Rate Limiting
-
-Instagram may rate-limit requests. If you encounter issues:
-
-- Wait a few minutes and try again
-- Use a logged-in session (sessions have higher rate limits)
-- Avoid running the script too frequently
+Options:
+1. Temporarily disable 2FA, login once (session saved), then re-enable
+2. Use a dedicated scraping account without 2FA
 
 ### Session Expired
-
-If you get authentication errors after previously successful logins:
 
 ```bash
 # Remove old session and login again
 rm ~/.config/instaloader/session-*
-python3 scripts/crawl_instagram.py --login-user your_username --login-pass your_password
+python scripts/crawl_instagram.py --login-user your_username --login-pass your_password
 ```
+
+### IPv6 Connection Issues (Mobile Hotspot)
+
+The script automatically forces IPv4 connections to fix issues with some mobile hotspots.
 
 ## Security Notes
 
 - Never commit credentials to version control
 - Use environment variables for sensitive data
-- The saved session file contains authentication tokens - keep it secure
+- Keep session files secure (`~/.config/instaloader/`)
 - Consider using a dedicated Instagram account for scraping
+- `.env` file should be in `.gitignore`
