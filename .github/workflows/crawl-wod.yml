@@ -28,7 +28,7 @@ jobs:
           echo "Checking for WOD date: $TODAY"
 
           # wods.json에서 오늘 날짜 키가 있는지 확인
-          if grep -q "\"$TODAY\"" wod-tracker/src/data/wods.json 2>/dev/null; then
+          if grep -q "\"$TODAY\"" src/data/wods.json 2>/dev/null; then
             echo "skip=true" >> $GITHUB_OUTPUT
             echo "Today's WOD already exists, skipping crawl"
           else
