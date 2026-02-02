@@ -38,10 +38,21 @@ class InstagramPlaywrightScraper:
         self.wods: Dict[str, str] = {}
 
     def _clean_wod_text(self, text: str) -> str:
-        """Clean WOD text by removing promotional hashtags and trimming whitespace."""
+        """Clean WOD text by removing promotional hashtags and metadata."""
         cleaned = text
+
+        # Remove Instagram meta description prefix
+        # Pattern: "XX likes, XX comments - username on DATE: "CONTENT"."
+        meta_pattern = r'^\d+\s*likes?,?\s*\d*\s*comments?\s*-\s*\w+\s+on\s+[^:]+:\s*"?'
+        cleaned = re.sub(meta_pattern, '', cleaned, flags=re.IGNORECASE)
+
+        # Remove trailing quote and period from meta description
+        cleaned = re.sub(r'"\.?\s*$', '', cleaned)
+
+        # Remove promotional text
         for promo in PROMO_TEXT_TO_REMOVE:
             cleaned = cleaned.replace(promo, "")
+
         return cleaned.strip()
 
     def _load_existing_wods(self) -> Dict[str, str]:
