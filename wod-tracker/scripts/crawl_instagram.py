@@ -103,6 +103,14 @@ class RateLimiter:
         self.consecutive_errors = 0
 
 
+# Promotional text to remove from WOD captions
+# Note: Instagram may use non-breaking spaces (\xa0), so we include both versions
+PROMO_TEXT_TO_REMOVE = [
+    "#crossfit #크로스핏 crossfitgangnam  #크로스핏강남 cfgn cfgnej #언주역크로스핏 #크로스핏강남언주 언주역 학동역 역삼역 신논현역 논현로614  025556744",
+    "#crossfit #크로스핏 crossfitgangnam\xa0 #크로스핏강남 cfgn cfgnej #언주역크로스핏 #크로스핏강남언주 언주역 학동역 역삼역 신논현역 논현로614\xa0 025556744",
+]
+
+
 class InstagramCrawler:
     """Instagram crawler with anti-blocking features."""
 
@@ -204,6 +212,13 @@ class InstagramCrawler:
             except Exception as e:
                 logger.warning(f"Could not load existing WODs: {e}")
         return {}
+
+    def _clean_wod_text(self, text: str) -> str:
+        """Clean WOD text by removing promotional hashtags and trimming whitespace."""
+        cleaned = text
+        for promo in PROMO_TEXT_TO_REMOVE:
+            cleaned = cleaned.replace(promo, "")
+        return cleaned.strip()
 
     def _save_wods(self):
         """Save WODs to JSON file."""
@@ -372,7 +387,7 @@ class InstagramCrawler:
                     idx += 1
                 post_date = f"{post_date}-{idx}"
 
-            self.wods[post_date] = caption.strip()
+            self.wods[post_date] = self._clean_wod_text(caption)
             new_count += 1
             self.posts_fetched += 1
 
