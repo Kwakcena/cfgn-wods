@@ -51,9 +51,6 @@ jobs:
       - name: Run crawler
         if: steps.check_wod.outputs.skip != 'true'
         continue-on-error: true  # Rate limit 발생 시에도 워크플로우 계속 진행
-        env:
-          INSTAGRAM_USER: ${{ secrets.INSTAGRAM_USER }}
-          INSTAGRAM_PASS: ${{ secrets.INSTAGRAM_PASS }}
         run: |
           python scripts/crawl_instagram.py --stop-on-existing
 
