@@ -7,13 +7,14 @@ Uses Playwright headless browser to scrape Instagram public profiles
 import json
 import os
 import re
+import sys
 import time
 import random
 import logging
 import argparse
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 # Configure logging
 logging.basicConfig(
@@ -233,13 +234,17 @@ class InstagramPlaywrightScraper:
 
         return False
 
-    def run(self, stop_on_existing: bool = False) -> Dict[str, str]:
-        """Run the Playwright scraper."""
+    def run(self, stop_on_existing: bool = False) -> Tuple[Dict[str, str], bool]:
+        """Run the Playwright scraper.
+
+        Returns:
+            Tuple of (wods dict, success bool). Success is False if no posts were found.
+        """
         try:
             from playwright.sync_api import sync_playwright
         except ImportError:
             logger.error("Playwright not installed. Run: pip install playwright && playwright install chromium")
-            return {}
+            return {}, False
 
         logger.info(f"Starting Playwright scraper for @{self.username}")
 
@@ -331,7 +336,7 @@ class InstagramPlaywrightScraper:
                         break
 
                 if not post_links:
-                    logger.warning("No post links found with any selector")
+                    logger.error("No post links found with any selector")
                     # Save screenshot for debugging
                     screenshot_path = self.output_path.parent / "debug_screenshot.png"
                     page.screenshot(path=str(screenshot_path))
@@ -341,6 +346,8 @@ class InstagramPlaywrightScraper:
                     with open(html_path, "w", encoding="utf-8") as f:
                         f.write(page.content())
                     logger.info(f"Saved page HTML to {html_path}")
+                    browser.close()
+                    return self.wods, False  # Failed to find posts
 
                 # Get unique post URLs
                 post_urls = []
@@ -431,10 +438,11 @@ class InstagramPlaywrightScraper:
 
             except Exception as e:
                 logger.error(f"Scraping error: {e}")
+                return self.wods, False
             finally:
                 browser.close()
 
-        return self.wods
+        return self.wods, True
 
 
 def main():
@@ -498,7 +506,11 @@ def main():
     print("=" * 60)
 
     scraper = InstagramPlaywrightScraper(args.username, output_path, login_user, login_pass)
-    scraper.run(stop_on_existing=args.stop_on_existing)
+    _, success = scraper.run(stop_on_existing=args.stop_on_existing)
+
+    if not success:
+        logger.error("Scraper failed to find posts")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
