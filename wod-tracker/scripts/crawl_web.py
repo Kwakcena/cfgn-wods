@@ -5,6 +5,7 @@ Uses Playwright headless browser to scrape Instagram public profiles
 """
 
 import json
+import os
 import re
 import time
 import random
@@ -32,10 +33,12 @@ PROMO_TEXT_TO_REMOVE = [
 class InstagramPlaywrightScraper:
     """Scraper using Playwright headless browser."""
 
-    def __init__(self, username: str, output_path: Path):
+    def __init__(self, username: str, output_path: Path, login_user: str = None, login_pass: str = None):
         self.username = username
         self.output_path = output_path
         self.wods: Dict[str, str] = {}
+        self.login_user = login_user
+        self.login_pass = login_pass
 
     def _clean_wod_text(self, text: str) -> str:
         """Clean WOD text by removing promotional hashtags and metadata."""
@@ -86,6 +89,150 @@ class InstagramPlaywrightScraper:
                 pass
         return None
 
+    def _login(self, page) -> bool:
+        """Login to Instagram."""
+        if not self.login_user or not self.login_pass:
+            logger.warning("No login credentials provided")
+            return False
+
+        try:
+            logger.info("Attempting to login to Instagram...")
+            page.goto("https://www.instagram.com/accounts/login/", wait_until='networkidle', timeout=60000)
+            time.sleep(3)
+
+            # Handle cookie consent first
+            try:
+                cookie_buttons = [
+                    'button:has-text("Allow all cookies")',
+                    'button:has-text("Accept All")',
+                    'button:has-text("Accept")',
+                    'button:has-text("허용")',
+                ]
+                for selector in cookie_buttons:
+                    btn = page.query_selector(selector)
+                    if btn:
+                        btn.click()
+                        logger.info("Clicked cookie consent button")
+                        time.sleep(2)
+                        break
+            except Exception:
+                pass
+
+            # Save screenshot for debugging
+            login_screenshot = self.output_path.parent / "debug_login.png"
+            page.screenshot(path=str(login_screenshot))
+            logger.debug(f"Saved login page screenshot to {login_screenshot}")
+
+            # Try multiple selectors for username input
+            username_selectors = [
+                'input[name="username"]',
+                'input[aria-label="Phone number, username, or email"]',
+                'input[aria-label*="username"]',
+                'input[type="text"]',
+            ]
+            username_input = None
+            for selector in username_selectors:
+                username_input = page.query_selector(selector)
+                if username_input:
+                    logger.debug(f"Found username input with selector: {selector}")
+                    break
+
+            # Try multiple selectors for password input
+            password_selectors = [
+                'input[name="password"]',
+                'input[aria-label="Password"]',
+                'input[type="password"]',
+            ]
+            password_input = None
+            for selector in password_selectors:
+                password_input = page.query_selector(selector)
+                if password_input:
+                    logger.debug(f"Found password input with selector: {selector}")
+                    break
+
+            if username_input and password_input:
+                username_input.fill(self.login_user)
+                time.sleep(0.5)
+                password_input.fill(self.login_pass)
+                time.sleep(0.5)
+
+                # Click login button
+                login_btn_selectors = [
+                    'button[type="submit"]',
+                    'button:has-text("Log in")',
+                    'button:has-text("Log In")',
+                    'div[role="button"]:has-text("Log in")',
+                ]
+                login_btn = None
+                for selector in login_btn_selectors:
+                    login_btn = page.query_selector(selector)
+                    if login_btn:
+                        break
+
+                if login_btn:
+                    login_btn.click()
+                    logger.info("Clicked login button")
+                    time.sleep(5)  # Wait for login to complete
+
+                    # Handle "Save Login Info" popup (this appears when login is successful)
+                    try:
+                        save_info_selectors = [
+                            'button:has-text("Not now")',
+                            'button:has-text("Not Now")',
+                            'div[role="button"]:has-text("Not now")',
+                            'div[role="button"]:has-text("Not Now")',
+                        ]
+                        for selector in save_info_selectors:
+                            not_now_btn = page.query_selector(selector)
+                            if not_now_btn:
+                                not_now_btn.click()
+                                logger.info("Clicked 'Not now' on save login info popup")
+                                time.sleep(2)
+                                break
+                    except Exception as e:
+                        logger.debug(f"No save login info popup: {e}")
+
+                    # Handle notifications popup
+                    try:
+                        for selector in save_info_selectors:
+                            not_now_btn = page.query_selector(selector)
+                            if not_now_btn:
+                                not_now_btn.click()
+                                logger.info("Clicked 'Not now' on notifications popup")
+                                time.sleep(1)
+                                break
+                    except Exception:
+                        pass
+
+                    # Check if login was successful by looking for home page elements
+                    home_indicators = [
+                        'svg[aria-label="Home"]',
+                        'a[href="/"]',
+                        'nav',
+                    ]
+                    for indicator in home_indicators:
+                        if page.query_selector(indicator):
+                            logger.info("Login successful!")
+                            return True
+
+                    # Also check URL - if not on login page, consider success
+                    if "/accounts/login" not in page.url and "/challenge" not in page.url:
+                        logger.info("Login successful (URL check)!")
+                        return True
+
+                    logger.error("Login failed - could not verify success")
+                    page.screenshot(path=str(self.output_path.parent / "debug_login_failed.png"))
+                    return False
+            else:
+                logger.error(f"Could not find login form inputs (username: {username_input is not None}, password: {password_input is not None})")
+                return False
+
+        except Exception as e:
+            logger.error(f"Login error: {e}")
+            return False
+
+        return False
+
     def run(self, stop_on_existing: bool = False) -> Dict[str, str]:
         """Run the Playwright scraper."""
         try:
@@ -111,20 +258,89 @@ class InstagramPlaywrightScraper:
             page = context.new_page()
 
             try:
+                # Login first if credentials provided
+                if self.login_user and self.login_pass:
+                    if not self._login(page):
+                        logger.error("Failed to login, continuing without authentication")
+
                 # Navigate to profile
                 url = f"https://www.instagram.com/{self.username}/"
                 logger.info(f"Navigating to {url}")
-                page.goto(url, wait_until='networkidle', timeout=60000)
-
-                # Wait for posts to load
+                page.goto(url, wait_until='domcontentloaded', timeout=60000)
+                # Wait for content to load
                 time.sleep(3)
 
-                # Try to find and click on posts
-                posts_data = []
+                # Wait for initial load
+                time.sleep(2)
 
-                # Find all post links
-                post_links = page.query_selector_all('a[href*="/p/"]')
-                logger.info(f"Found {len(post_links)} post links")
+                # Handle cookie consent popup
+                try:
+                    cookie_buttons = [
+                        'button:has-text("Allow all cookies")',
+                        'button:has-text("Accept All")',
+                        'button:has-text("Accept")',
+                        '[data-testid="cookie-policy-manage-dialog-accept-button"]',
+                    ]
+                    for selector in cookie_buttons:
+                        btn = page.query_selector(selector)
+                        if btn:
+                            btn.click()
+                            logger.info("Clicked cookie consent button")
+                            time.sleep(1)
+                            break
+                except Exception as e:
+                    logger.debug(f"No cookie popup or error: {e}")
+
+                # Handle login popup (click outside or close button)
+                try:
+                    login_close_selectors = [
+                        '[aria-label="Close"]',
+                        'svg[aria-label="Close"]',
+                        'button:has-text("Not Now")',
+                        'button:has-text("Not now")',
+                    ]
+                    for selector in login_close_selectors:
+                        btn = page.query_selector(selector)
+                        if btn:
+                            btn.click()
+                            logger.info("Closed login popup")
+                            time.sleep(1)
+                            break
+                except Exception as e:
+                    logger.debug(f"No login popup or error: {e}")
+
+                # Scroll down to trigger lazy loading
+                page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
+                time.sleep(2)
+                page.evaluate("window.scrollTo(0, 0)")
+                time.sleep(1)
+
+                # Try multiple selectors to find post links
+                post_links = []
+                post_selectors = [
+                    'a[href*="/p/"]',
+                    'article a[href*="/p/"]',
+                    'main a[href*="/p/"]',
+                    'div[style*="flex"] a[href*="/p/"]',
+                ]
+
+                for selector in post_selectors:
+                    post_links = page.query_selector_all(selector)
+                    if post_links:
+                        logger.info(f"Found {len(post_links)} post links using selector: {selector}")
+                        break
+
+                if not post_links:
+                    logger.warning("No post links found with any selector")
+                    # Save screenshot for debugging
+                    screenshot_path = self.output_path.parent / "debug_screenshot.png"
+                    page.screenshot(path=str(screenshot_path))
+                    logger.info(f"Saved debug screenshot to {screenshot_path}")
+                    # Also save page content for debugging
+                    html_path = self.output_path.parent / "debug_page.html"
+                    with open(html_path, "w", encoding="utf-8") as f:
+                        f.write(page.content())
+                    logger.info(f"Saved page HTML to {html_path}")
 
                 # Get unique post URLs
                 post_urls = []
@@ -143,8 +359,8 @@ class InstagramPlaywrightScraper:
                 for i, post_url in enumerate(post_urls, 1):
                     try:
                         logger.info(f"[{i}/{len(post_urls)}] Fetching: {post_url}")
-                        page.goto(post_url, wait_until='networkidle', timeout=30000)
-                        time.sleep(random.uniform(1, 2))
+                        page.goto(post_url, wait_until='domcontentloaded', timeout=30000)
+                        time.sleep(random.uniform(2, 3))
 
                         # Try to find caption
                         caption = ""
@@ -245,11 +461,25 @@ def main():
         action="store_true",
         help="Enable debug logging"
     )
+    parser.add_argument(
+        "--login-user",
+        default=None,
+        help="Instagram login username (or set INSTAGRAM_USER env var)"
+    )
+    parser.add_argument(
+        "--login-pass",
+        default=None,
+        help="Instagram login password (or set INSTAGRAM_PASS env var)"
+    )
 
     args = parser.parse_args()
 
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
+
+    # Get login credentials from args or environment variables
+    login_user = args.login_user or os.environ.get("INSTAGRAM_USER")
+    login_pass = args.login_pass or os.environ.get("INSTAGRAM_PASS")
 
     # Determine output path
     if args.output:
@@ -264,9 +494,10 @@ def main():
     print(f"Target account: @{args.username}")
     print(f"Output file: {output_path}")
     print(f"Stop on existing: {args.stop_on_existing}")
+    print(f"Login user: {login_user or 'Not provided'}")
     print("=" * 60)
 
-    scraper = InstagramPlaywrightScraper(args.username, output_path)
+    scraper = InstagramPlaywrightScraper(args.username, output_path, login_user, login_pass)
     scraper.run(stop_on_existing=args.stop_on_existing)
 
 
