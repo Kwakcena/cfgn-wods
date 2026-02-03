@@ -200,7 +200,14 @@ class InstagramPlaywrightScraper:
                 if login_btn:
                     login_btn.click()
                     logger.info("Clicked login button")
-                    time.sleep(5)  # Wait for login to complete
+                    time.sleep(8)  # Wait longer for login to complete
+
+                    # Log current URL for debugging
+                    current_url = page.url
+                    logger.info(f"Current URL after login: {current_url}")
+
+                    # Save screenshot after login attempt
+                    page.screenshot(path=str(self.output_path.parent / "debug_after_login.png"))
 
                     # Handle "Save Login Info" popup (this appears when login is successful)
                     try:
@@ -209,12 +216,13 @@ class InstagramPlaywrightScraper:
                             'button:has-text("Not Now")',
                             'div[role="button"]:has-text("Not now")',
                             'div[role="button"]:has-text("Not Now")',
+                            'button:has-text("Save info")',  # Also try clicking save
                         ]
                         for selector in save_info_selectors:
                             not_now_btn = page.query_selector(selector)
-                            if not_now_btn:
+                            if not_now_btn and not_now_btn.is_visible():
                                 not_now_btn.click()
-                                logger.info("Clicked 'Not now' on save login info popup")
+                                logger.info(f"Clicked '{selector}' on save login info popup")
                                 time.sleep(2)
                                 break
                     except Exception as e:
@@ -222,9 +230,10 @@ class InstagramPlaywrightScraper:
 
                     # Handle notifications popup
                     try:
+                        time.sleep(1)
                         for selector in save_info_selectors:
                             not_now_btn = page.query_selector(selector)
-                            if not_now_btn:
+                            if not_now_btn and not_now_btn.is_visible():
                                 not_now_btn.click()
                                 logger.info("Clicked 'Not now' on notifications popup")
                                 time.sleep(1)
@@ -232,23 +241,36 @@ class InstagramPlaywrightScraper:
                     except Exception:
                         pass
 
+                    # Update URL after handling popups
+                    current_url = page.url
+                    logger.info(f"Final URL: {current_url}")
+
                     # Check if login was successful by looking for home page elements
                     home_indicators = [
                         'svg[aria-label="Home"]',
+                        'svg[aria-label="홈"]',
                         'a[href="/"]',
                         'nav',
+                        'a[href*="/direct/"]',
                     ]
                     for indicator in home_indicators:
-                        if page.query_selector(indicator):
-                            logger.info("Login successful!")
+                        elem = page.query_selector(indicator)
+                        if elem:
+                            logger.info(f"Login successful! Found indicator: {indicator}")
                             return True
 
-                    # Also check URL - if not on login page, consider success
-                    if "/accounts/login" not in page.url and "/challenge" not in page.url:
+                    # Check URL - if not on login/challenge page, consider success
+                    if "/accounts/login" not in current_url and "/challenge" not in current_url:
                         logger.info("Login successful (URL check)!")
                         return True
 
-                    logger.error("Login failed - could not verify success")
+                    # If we're on a challenge page, log it
+                    if "/challenge" in current_url:
+                        logger.error("Instagram requires additional verification (challenge)")
+                        page.screenshot(path=str(self.output_path.parent / "debug_challenge.png"))
+                        return False
+
+                    logger.error(f"Login failed - could not verify success. URL: {current_url}")
                     page.screenshot(path=str(self.output_path.parent / "debug_login_failed.png"))
                     return False
             else:

@@ -65,6 +65,16 @@ jobs:
         run: |
           python scripts/crawl_instagram.py --stop-on-existing
 
+      - name: Upload debug screenshots
+        if: steps.check_wod.outputs.skip != 'true' && failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-screenshots
+          path: |
+            wod-tracker/src/data/debug_*.png
+            wod-tracker/src/data/debug_*.html
+          retention-days: 3
+
       - name: Check for changes
         if: steps.check_wod.outputs.skip != 'true'
         id: changes
