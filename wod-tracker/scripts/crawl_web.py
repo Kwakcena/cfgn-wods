@@ -34,12 +34,13 @@ PROMO_TEXT_TO_REMOVE = [
 class InstagramPlaywrightScraper:
     """Scraper using Playwright headless browser."""
 
-    def __init__(self, username: str, output_path: Path, login_user: str = None, login_pass: str = None):
+    def __init__(self, username: str, output_path: Path, login_user: str = None, login_pass: str = None, session_data: str = None):
         self.username = username
         self.output_path = output_path
         self.wods: Dict[str, str] = {}
         self.login_user = login_user
         self.login_pass = login_pass
+        self.session_data = session_data  # JSON string of storage state
 
     def _clean_wod_text(self, text: str) -> str:
         """Clean WOD text by removing promotional hashtags and metadata."""
@@ -305,15 +306,28 @@ class InstagramPlaywrightScraper:
         with sync_playwright() as p:
             # Launch browser
             browser = p.chromium.launch(headless=True)
-            context = browser.new_context(
-                viewport={'width': 1280, 'height': 720},
-                user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            )
+
+            # Prepare context options
+            context_options = {
+                'viewport': {'width': 1280, 'height': 720},
+                'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            }
+
+            # Use session data if available
+            if self.session_data:
+                try:
+                    storage_state = json.loads(self.session_data)
+                    context_options['storage_state'] = storage_state
+                    logger.info("Using saved session data")
+                except json.JSONDecodeError as e:
+                    logger.error(f"Invalid session data: {e}")
+
+            context = browser.new_context(**context_options)
             page = context.new_page()
 
             try:
-                # Login first if credentials provided
-                if self.login_user and self.login_pass:
+                # Login if session not provided and credentials available
+                if not self.session_data and self.login_user and self.login_pass:
                     if not self._login(page):
                         logger.error("Failed to login, continuing without authentication")
 
@@ -494,6 +508,63 @@ class InstagramPlaywrightScraper:
         return self.wods, True
 
 
+def save_session(login_user: str, login_pass: str, output_file: str):
+    """Login and save session to a file."""
+    from playwright.sync_api import sync_playwright
+
+    print("=" * 60)
+    print("Instagram Session Saver")
+    print("=" * 60)
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=False)  # Show browser for manual verification
+        context = browser.new_context(
+            viewport={'width': 1280, 'height': 720},
+            user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        )
+        page = context.new_page()
+
+        print(f"Logging in as {login_user}...")
+        page.goto("https://www.instagram.com/accounts/login/", wait_until='domcontentloaded')
+        time.sleep(3)
+
+        # Handle cookie consent
+        try:
+            for selector in ['button:has-text("Allow all cookies")', 'button:has-text("Accept")']:
+                btn = page.query_selector(selector)
+                if btn:
+                    btn.click()
+                    time.sleep(2)
+                    break
+        except Exception:
+            pass
+
+        # Fill login form
+        page.fill('input[name="username"]', login_user)
+        time.sleep(0.5)
+        page.fill('input[name="password"]', login_pass)
+        time.sleep(0.5)
+        page.click('button[type="submit"]')
+
+        print("Please complete any verification (2FA, code entry) in the browser...")
+        print("Press Enter when you're logged in and see the Instagram home page...")
+        input()
+
+        # Save session
+        storage_state = context.storage_state()
+        with open(output_file, 'w') as f:
+            json.dump(storage_state, f)
+
+        print(f"Session saved to {output_file}")
+        print("")
+        print("To use this session in GitHub Actions:")
+        print("1. Copy the contents of the session file")
+        print("2. Create a GitHub Secret named INSTAGRAM_SESSION")
+        print("3. Paste the session JSON as the secret value")
+
+        browser.close()
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Instagram Playwright Scraper for WOD Tracker"
@@ -528,15 +599,45 @@ def main():
         default=None,
         help="Instagram login password (or set INSTAGRAM_PASS env var)"
     )
+    parser.add_argument(
+        "--save-session",
+        default=None,
+        metavar="FILE",
+        help="Login and save session to file (for later use with --session or INSTAGRAM_SESSION)"
+    )
+    parser.add_argument(
+        "--session",
+        default=None,
+        metavar="FILE",
+        help="Load session from file (or set INSTAGRAM_SESSION env var with JSON content)"
+    )
 
     args = parser.parse_args()
 
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
 
+    # Handle session saving mode
+    if args.save_session:
+        login_user = args.login_user or os.environ.get("INSTAGRAM_USER")
+        login_pass = args.login_pass or os.environ.get("INSTAGRAM_PASS")
+        if not login_user or not login_pass:
+            print("Error: --login-user and --login-pass required for --save-session")
+            sys.exit(1)
+        save_session(login_user, login_pass, args.save_session)
+        return
+
     # Get login credentials from args or environment variables
     login_user = args.login_user or os.environ.get("INSTAGRAM_USER")
     login_pass = args.login_pass or os.environ.get("INSTAGRAM_PASS")
+
+    # Get session data from file or environment variable
+    session_data = None
+    if args.session:
+        with open(args.session, 'r') as f:
+            session_data = f.read()
+    elif os.environ.get("INSTAGRAM_SESSION"):
+        session_data = os.environ.get("INSTAGRAM_SESSION")
 
     # Determine output path
     if args.output:
@@ -552,9 +653,10 @@ def main():
     print(f"Output file: {output_path}")
     print(f"Stop on existing: {args.stop_on_existing}")
     print(f"Login user: {login_user or 'Not provided'}")
+    print(f"Session: {'Provided' if session_data else 'Not provided'}")
     print("=" * 60)
 
-    scraper = InstagramPlaywrightScraper(args.username, output_path, login_user, login_pass)
+    scraper = InstagramPlaywrightScraper(args.username, output_path, login_user, login_pass, session_data)
     _, success = scraper.run(stop_on_existing=args.stop_on_existing)
 
     if not success:

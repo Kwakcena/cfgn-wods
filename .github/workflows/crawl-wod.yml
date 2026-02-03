@@ -54,6 +54,7 @@ jobs:
         id: web_scraper
         continue-on-error: true
         env:
+          INSTAGRAM_SESSION: ${{ secrets.INSTAGRAM_SESSION }}
           INSTAGRAM_USER: ${{ secrets.INSTAGRAM_USER }}
           INSTAGRAM_PASS: ${{ secrets.INSTAGRAM_PASS }}
         run: |
