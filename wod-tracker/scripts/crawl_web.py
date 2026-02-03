@@ -524,31 +524,29 @@ def save_session(login_user: str, login_pass: str, output_file: str):
         )
         page = context.new_page()
 
-        print(f"Logging in as {login_user}...")
-        page.goto("https://www.instagram.com/accounts/login/", wait_until='domcontentloaded')
+        print(f"Opening Instagram login page...")
+        page.goto("https://www.instagram.com/accounts/login/", wait_until='domcontentloaded', timeout=60000)
         time.sleep(3)
 
-        # Handle cookie consent
-        try:
-            for selector in ['button:has-text("Allow all cookies")', 'button:has-text("Accept")']:
-                btn = page.query_selector(selector)
-                if btn:
-                    btn.click()
-                    time.sleep(2)
-                    break
-        except Exception:
-            pass
-
-        # Fill login form
-        page.fill('input[name="username"]', login_user)
-        time.sleep(0.5)
-        page.fill('input[name="password"]', login_pass)
-        time.sleep(0.5)
-        page.click('button[type="submit"]')
-
-        print("Please complete any verification (2FA, code entry) in the browser...")
+        print("")
+        print("Please complete the following in the browser:")
+        print("1. Accept cookies if prompted")
+        print("2. Enter username and password")
+        print("3. Complete any 2FA or security verification")
+        print("4. Wait until you see the Instagram home page")
+        print("")
+        print(f"Username to use: {login_user}")
+        print(f"Password to use: {login_pass}")
+        print("")
         print("Press Enter when you're logged in and see the Instagram home page...")
         input()
+
+        # Verify we're logged in by checking URL
+        current_url = page.url
+        if "/accounts/login" in current_url or "/challenge" in current_url or "/auth_platform" in current_url:
+            print(f"Warning: Still on login/verification page: {current_url}")
+            print("Please complete the login process and press Enter...")
+            input()
 
         # Save session
         storage_state = context.storage_state()
