@@ -1,5 +1,5 @@
-import { useRef, useEffect, useState } from 'react';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { useRef, useEffect, useState, useLayoutEffect } from 'react';
+import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import type { WodListProps } from '../types';
 import { WodCard } from './WodCard';
 
@@ -23,24 +23,21 @@ function getColumnCount(width: number): number {
 }
 
 export function WodList({ wods, searchTerm }: WodListProps) {
-  const parentRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const { width } = useWindowSize();
   const columnCount = getColumnCount(width);
 
   const rowCount = Math.ceil(wods.length / columnCount);
 
-  const virtualizer = useVirtualizer({
+  const virtualizer = useWindowVirtualizer({
     count: rowCount,
-    getScrollElement: () => parentRef.current,
     estimateSize: () => 300,
     overscan: 3,
-    measureElement: (element) => {
-      return element.getBoundingClientRect().height + 16; // 16px for gap
-    },
+    scrollMargin: listRef.current?.offsetTop ?? 0,
   });
 
-  // Re-measure when column count changes
-  useEffect(() => {
+  // Update scroll margin when list position changes
+  useLayoutEffect(() => {
     virtualizer.measure();
   }, [columnCount, virtualizer]);
 
@@ -68,11 +65,10 @@ export function WodList({ wods, searchTerm }: WodListProps) {
     );
   }
 
+  const items = virtualizer.getVirtualItems();
+
   return (
-    <div
-      ref={parentRef}
-      className="h-[calc(100vh-200px)] overflow-auto p-4 overscroll-none"
-    >
+    <div ref={listRef} className="p-4">
       <div
         style={{
           height: `${virtualizer.getTotalSize()}px`,
@@ -80,36 +76,39 @@ export function WodList({ wods, searchTerm }: WodListProps) {
           position: 'relative',
         }}
       >
-        {virtualizer.getVirtualItems().map((virtualRow) => {
-          const startIndex = virtualRow.index * columnCount;
-          const rowWods = wods.slice(startIndex, startIndex + columnCount);
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            transform: `translateY(${(items[0]?.start ?? 0) - (virtualizer.options.scrollMargin ?? 0)}px)`,
+          }}
+        >
+          {items.map((virtualRow) => {
+            const startIndex = virtualRow.index * columnCount;
+            const rowWods = wods.slice(startIndex, startIndex + columnCount);
 
-          return (
-            <div
-              key={virtualRow.key}
-              data-index={virtualRow.index}
-              ref={virtualizer.measureElement}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                transform: `translateY(${virtualRow.start}px)`,
-              }}
-            >
+            return (
               <div
-                className="grid gap-4"
-                style={{
-                  gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`,
-                }}
+                key={virtualRow.key}
+                data-index={virtualRow.index}
+                ref={virtualizer.measureElement}
               >
-                {rowWods.map((wod) => (
-                  <WodCard key={wod.date} wod={wod} searchTerm={searchTerm} />
-                ))}
+                <div
+                  className="grid gap-4 pb-4"
+                  style={{
+                    gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`,
+                  }}
+                >
+                  {rowWods.map((wod) => (
+                    <WodCard key={wod.date} wod={wod} searchTerm={searchTerm} />
+                  ))}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     </div>
   );
