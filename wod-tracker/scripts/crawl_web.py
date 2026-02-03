@@ -98,58 +98,85 @@ class InstagramPlaywrightScraper:
 
         try:
             logger.info("Attempting to login to Instagram...")
-            page.goto("https://www.instagram.com/accounts/login/", wait_until='networkidle', timeout=60000)
-            time.sleep(3)
+            page.goto("https://www.instagram.com/accounts/login/", wait_until='domcontentloaded', timeout=60000)
 
-            # Handle cookie consent first
-            try:
-                cookie_buttons = [
-                    'button:has-text("Allow all cookies")',
-                    'button:has-text("Accept All")',
-                    'button:has-text("Accept")',
-                    'button:has-text("허용")',
-                ]
-                for selector in cookie_buttons:
-                    btn = page.query_selector(selector)
-                    if btn:
-                        btn.click()
-                        logger.info("Clicked cookie consent button")
-                        time.sleep(2)
+            # Wait for page to fully render
+            time.sleep(5)
+
+            # Handle cookie consent first - try multiple times
+            for attempt in range(3):
+                try:
+                    cookie_buttons = [
+                        'button:has-text("Allow all cookies")',
+                        'button:has-text("Allow essential and optional cookies")',
+                        'button:has-text("Accept All")',
+                        'button:has-text("Accept")',
+                        'button:has-text("허용")',
+                        'button:has-text("Decline optional cookies")',
+                    ]
+                    clicked = False
+                    for selector in cookie_buttons:
+                        btn = page.query_selector(selector)
+                        if btn and btn.is_visible():
+                            btn.click()
+                            logger.info(f"Clicked cookie consent button: {selector}")
+                            time.sleep(2)
+                            clicked = True
+                            break
+                    if clicked:
                         break
-            except Exception:
-                pass
+                except Exception as e:
+                    logger.debug(f"Cookie popup attempt {attempt + 1}: {e}")
+                time.sleep(1)
 
             # Save screenshot for debugging
             login_screenshot = self.output_path.parent / "debug_login.png"
             page.screenshot(path=str(login_screenshot))
-            logger.debug(f"Saved login page screenshot to {login_screenshot}")
+            logger.info(f"Saved login page screenshot to {login_screenshot}")
+
+            # Wait for login form to appear
+            logger.info("Waiting for login form...")
+            try:
+                page.wait_for_selector('input[name="username"], input[type="text"]', timeout=10000)
+            except Exception as e:
+                logger.warning(f"Timeout waiting for login form: {e}")
 
             # Try multiple selectors for username input
             username_selectors = [
                 'input[name="username"]',
                 'input[aria-label="Phone number, username, or email"]',
                 'input[aria-label*="username"]',
-                'input[type="text"]',
+                'input[autocomplete="username"]',
+                'form input[type="text"]',
             ]
             username_input = None
             for selector in username_selectors:
-                username_input = page.query_selector(selector)
-                if username_input:
-                    logger.debug(f"Found username input with selector: {selector}")
-                    break
+                try:
+                    username_input = page.query_selector(selector)
+                    if username_input and username_input.is_visible():
+                        logger.info(f"Found username input with selector: {selector}")
+                        break
+                    username_input = None
+                except Exception:
+                    pass
 
             # Try multiple selectors for password input
             password_selectors = [
                 'input[name="password"]',
                 'input[aria-label="Password"]',
+                'input[autocomplete="current-password"]',
                 'input[type="password"]',
             ]
             password_input = None
             for selector in password_selectors:
-                password_input = page.query_selector(selector)
-                if password_input:
-                    logger.debug(f"Found password input with selector: {selector}")
-                    break
+                try:
+                    password_input = page.query_selector(selector)
+                    if password_input and password_input.is_visible():
+                        logger.info(f"Found password input with selector: {selector}")
+                        break
+                    password_input = None
+                except Exception:
+                    pass
 
             if username_input and password_input:
                 username_input.fill(self.login_user)
