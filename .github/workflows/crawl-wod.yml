@@ -2,8 +2,8 @@ name: Crawl WOD
 
 on:
   schedule:
-    # KST 22:00, 23:00, 00:00, 01:00 (UTC 13:00, 14:00, 15:00, 16:00)
-    - cron: '0 13,14,15,16 * * *'
+    # KST 21:00-01:45 (UTC 12:00-16:45) 15분마다 실행
+    - cron: '*/15 12-16 * * *'
   workflow_dispatch: # 수동 실행 가능
 
 permissions:
@@ -20,20 +20,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Check if today's WOD already exists
+      - name: Check if tomorrow's WOD already exists
         id: check_wod
         run: |
-          # KST 기준 오늘 날짜 계산
-          TODAY=$(TZ='Asia/Seoul' date +'%Y-%m-%d')
-          echo "Checking for WOD date: $TODAY"
+          # KST 기준 내일 날짜 계산 (오늘 올리는 포스팅은 내일의 WOD)
+          TOMORROW=$(TZ='Asia/Seoul' date -d '+1 day' +'%Y-%m-%d')
+          echo "Checking for WOD date: $TOMORROW"
 
-          # wods.json에서 오늘 날짜 키가 있는지 확인
-          if grep -q "\"$TODAY\"" src/data/wods.json 2>/dev/null; then
+          # wods.json에서 내일 날짜 키가 있는지 확인
+          if grep -q "\"$TOMORROW\"" src/data/wods.json 2>/dev/null; then
             echo "skip=true" >> $GITHUB_OUTPUT
-            echo "Today's WOD already exists, skipping crawl"
+            echo "Tomorrow's WOD already exists, skipping crawl"
           else
             echo "skip=false" >> $GITHUB_OUTPUT
-            echo "Today's WOD not found, proceeding with crawl"
+            echo "Tomorrow's WOD not found, proceeding with crawl"
           fi
 
       - name: Set up Python
