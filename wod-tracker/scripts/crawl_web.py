@@ -16,6 +16,13 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
+from wod_utils import (
+    PROMO_TEXT_TO_REMOVE,
+    clean_wod_text as _shared_clean_wod_text,
+    extract_wod_date,
+    strip_wod_date_prefix,
+)
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -23,13 +30,6 @@ logging.basicConfig(
     datefmt='%H:%M:%S'
 )
 logger = logging.getLogger(__name__)
-
-# Promotional text to remove from WOD captions
-PROMO_TEXT_TO_REMOVE = [
-    "#crossfit #크로스핏 crossfitgangnam  #크로스핏강남 cfgn cfgnej #언주역크로스핏 #크로스핏강남언주 언주역 학동역 역삼역 신논현역 논현로614  025556744",
-    "#crossfit #크로스핏 crossfitgangnam\xa0 #크로스핏강남 cfgn cfgnej #언주역크로스핏 #크로스핏강남언주 언주역 학동역 역삼역 신논현역 논현로614\xa0 025556744",
-]
-
 
 class InstagramPlaywrightScraper:
     """Scraper using Playwright headless browser."""
@@ -44,21 +44,7 @@ class InstagramPlaywrightScraper:
 
     def _clean_wod_text(self, text: str) -> str:
         """Clean WOD text by removing promotional hashtags and metadata."""
-        cleaned = text
-
-        # Remove Instagram meta description prefix
-        # Pattern: "XX likes, XX comments - username on DATE: "CONTENT"."
-        meta_pattern = r'^\d+\s*likes?,?\s*\d*\s*comments?\s*-\s*\w+\s+on\s+[^:]+:\s*"?'
-        cleaned = re.sub(meta_pattern, '', cleaned, flags=re.IGNORECASE)
-
-        # Remove trailing quote and period from meta description
-        cleaned = re.sub(r'"\.?\s*$', '', cleaned)
-
-        # Remove promotional text
-        for promo in PROMO_TEXT_TO_REMOVE:
-            cleaned = cleaned.replace(promo, "")
-
-        return cleaned.strip()
+        return _shared_clean_wod_text(text)
 
     def _load_existing_wods(self) -> Dict[str, str]:
         """Load existing WODs from file if it exists."""
@@ -79,17 +65,7 @@ class InstagramPlaywrightScraper:
 
     def _extract_date_from_text(self, text: str) -> Optional[str]:
         """Try to extract date from WOD text (e.g., '20260203 W.O.D!!')."""
-        # Pattern: 8 digits at the start that look like YYYYMMDD
-        match = re.search(r'(\d{8})\s*W\.?O\.?D', text, re.IGNORECASE)
-        if match:
-            date_str = match.group(1)
-            try:
-                # Parse YYYYMMDD format
-                dt = datetime.strptime(date_str, "%Y%m%d")
-                return dt.strftime("%Y-%m-%d")
-            except ValueError:
-                pass
-        return None
+        return extract_wod_date(text)
 
     def _login(self, page) -> bool:
         """Login to Instagram."""
@@ -482,9 +458,9 @@ class InstagramPlaywrightScraper:
                                 idx += 1
                             final_date = f"{post_date}-{idx}"
 
-                        # Save cleaned WOD
+                        # Save cleaned WOD (strip date prefix from content)
                         cleaned_caption = self._clean_wod_text(caption)
-                        self.wods[final_date] = cleaned_caption
+                        self.wods[final_date] = strip_wod_date_prefix(cleaned_caption)
                         new_count += 1
                         logger.info(f"{final_date} - Saved new WOD")
 
